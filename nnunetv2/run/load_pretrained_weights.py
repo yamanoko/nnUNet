@@ -50,73 +50,77 @@ def load_pretrained_weights(network, fname, verbose=False):
     #   - stem.0.all_modules.0
     # Primus:
     #   - down_projection.proj
-    first_conv_key_patterns = [
+    #
+    # Note: .conv and .all_modules.0 refer to the same layer,
+    # so we need to handle all matching keys together.
+    # Both .weight and .bias need to be handled if present.
+    first_conv_key_prefixes = [
         # PlainConvUNet (standard nnUNet)
-        'encoder.stages.0.0.convs.0.conv.weight',
-        'encoder.stages.0.0.convs.0.all_modules.0.weight',
+        'encoder.stages.0.0.convs.0.conv',
+        'encoder.stages.0.0.convs.0.all_modules.0',
         # ResidualEncoderUNet (ResEnc)
-        'encoder.stem.convs.0.conv.weight',
-        'encoder.stem.convs.0.all_modules.0.weight',
+        'encoder.stem.convs.0.conv',
+        'encoder.stem.convs.0.all_modules.0',
         # ResNetD
-        'stem.0.conv.weight',
-        'stem.0.all_modules.0.weight',
+        'stem.0.conv',
+        'stem.0.all_modules.0',
         # Primus
-        'down_projection.proj.weight',
+        'down_projection.proj',
     ]
 
+    # Find all matching keys in both model_dict and pretrained_dict
+    # Check for .weight suffix
     first_conv_keys = []
-    for pattern in first_conv_key_patterns:
-        if pattern in model_dict.keys():
-            first_conv_keys.append(pattern)
+    for prefix in first_conv_key_prefixes:
+        weight_key = prefix + '.weight'
+        if weight_key in model_dict.keys() and weight_key in pretrained_dict.keys():
+            first_conv_keys.append(weight_key)
 
+    # Process ALL matching weight keys
     for key in first_conv_keys:
-        if key in pretrained_dict:
-            pretrained_shape = pretrained_dict[key].shape
-            model_shape = model_dict[key].shape
+        pretrained_shape = pretrained_dict[key].shape
+        model_shape = model_dict[key].shape
 
-            # Check if this is a conv layer with matching spatial dims
-            # but different input channels
-            # (shape[1] for conv weights: [out_ch, in_ch, ...])
-            if (len(pretrained_shape) >= 3 and
-                len(model_shape) >= 3 and
-                len(pretrained_shape) == len(model_shape) and
-                pretrained_shape[0] == model_shape[0] and
-                pretrained_shape[2:] == model_shape[2:] and
-                    pretrained_shape[1] != model_shape[1]):
+        # Check if this is a conv layer with matching spatial dims
+        # but different input channels
+        # (shape[1] for conv weights: [out_ch, in_ch, ...])
+        if (len(pretrained_shape) >= 3 and
+            len(model_shape) >= 3 and
+            len(pretrained_shape) == len(model_shape) and
+            pretrained_shape[0] == model_shape[0] and
+            pretrained_shape[2:] == model_shape[2:] and
+                pretrained_shape[1] != model_shape[1]):
 
-                pretrained_in_ch = pretrained_shape[1]
-                model_in_ch = model_shape[1]
+            pretrained_in_ch = pretrained_shape[1]
+            model_in_ch = model_shape[1]
 
-                print(f"Expanding input channels for {key}: "
-                      f"{pretrained_in_ch} -> {model_in_ch}")
+            print(f"Expanding input channels for {key}: "
+                  f"{pretrained_in_ch} -> {model_in_ch}")
 
-                # Repeat the pretrained weights across input channels
-                weight = pretrained_dict[key]
+            # Repeat the pretrained weights across input channels
+            weight = pretrained_dict[key]
 
-                # Calculate how many times to repeat and if remainder
-                repeat_times = model_in_ch // pretrained_in_ch
-                remainder = model_in_ch % pretrained_in_ch
+            # Calculate how many times to repeat and if remainder
+            repeat_times = model_in_ch // pretrained_in_ch
+            remainder = model_in_ch % pretrained_in_ch
 
-                # Repeat the weights
-                expanded_weights = weight.repeat(
-                    1, repeat_times, *([1] * (len(model_shape) - 2)))
+            # Repeat the weights
+            expanded_weights = weight.repeat(
+                1, repeat_times, *([1] * (len(model_shape) - 2)))
 
-                # Handle remainder channels
-                if remainder > 0:
-                    expanded_weights = torch.cat([
-                        expanded_weights,
-                        weight[:, :remainder, ...]
-                    ], dim=1)
+            # Handle remainder channels
+            if remainder > 0:
+                expanded_weights = torch.cat([
+                    expanded_weights,
+                    weight[:, :remainder, ...]
+                ], dim=1)
 
-                # Normalize to maintain similar activation magnitudes
-                expanded_weights = (expanded_weights / model_in_ch *
-                                    pretrained_in_ch)
+            # Normalize to maintain similar activation magnitudes
+            expanded_weights = (expanded_weights / model_in_ch *
+                                pretrained_in_ch)
 
-                # Update the pretrained_dict with expanded weights
-                pretrained_dict[key] = expanded_weights
-
-                # Once we've found and expanded the input layer, stop
-                break
+            # Update the pretrained_dict with expanded weights
+            pretrained_dict[key] = expanded_weights
 
     # verify that all but the segmentation layers have the same shape
     for key, _ in model_dict.items():
