@@ -53,28 +53,34 @@ def load_pretrained_weights(network, fname, verbose=False):
     #
     # Note: .conv and .all_modules.0 refer to the same layer,
     # so we need to handle all matching keys together.
-    # Both .weight and .bias need to be handled if present.
-    first_conv_key_prefixes = [
+    #
+    # IMPORTANT: UNetDecoder and UNetResDecoder store a reference to the
+    # encoder as self.encoder, which results in keys like:
+    # decoder.encoder.stem.convs.0.conv.weight
+    # We use suffix matching to handle all possible prefixes.
+    first_conv_key_suffixes = [
         # PlainConvUNet (standard nnUNet)
-        'encoder.stages.0.0.convs.0.conv',
-        'encoder.stages.0.0.convs.0.all_modules.0',
+        'encoder.stages.0.0.convs.0.conv.weight',
+        'encoder.stages.0.0.convs.0.all_modules.0.weight',
         # ResidualEncoderUNet (ResEnc)
-        'encoder.stem.convs.0.conv',
-        'encoder.stem.convs.0.all_modules.0',
+        'encoder.stem.convs.0.conv.weight',
+        'encoder.stem.convs.0.all_modules.0.weight',
         # ResNetD
-        'stem.0.conv',
-        'stem.0.all_modules.0',
+        'stem.0.conv.weight',
+        'stem.0.all_modules.0.weight',
         # Primus
-        'down_projection.proj',
+        'down_projection.proj.weight',
     ]
 
     # Find all matching keys in both model_dict and pretrained_dict
-    # Check for .weight suffix
+    # Use suffix matching to handle any prefix (e.g., decoder.encoder.*)
     first_conv_keys = []
-    for prefix in first_conv_key_prefixes:
-        weight_key = prefix + '.weight'
-        if weight_key in model_dict.keys() and weight_key in pretrained_dict.keys():
-            first_conv_keys.append(weight_key)
+    for key in model_dict.keys():
+        if key in pretrained_dict.keys():
+            for suffix in first_conv_key_suffixes:
+                if key.endswith(suffix):
+                    first_conv_keys.append(key)
+                    break
 
     # Process ALL matching weight keys
     for key in first_conv_keys:
