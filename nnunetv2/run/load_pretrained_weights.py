@@ -36,21 +36,50 @@ def load_pretrained_weights(network, fname, verbose=False):
     model_dict = mod.state_dict()
 
     # Handle input layer shape mismatch for different number of input channels
-    # Check if the first conv layer has different input channels
-    first_conv_keys = [
-        k for k in model_dict.keys()
-        if 'conv_blocks_context.0.blocks.0.conv.weight' in k or
-        'encoder.stages.0.0.conv.weight' in k
+    # These patterns are based on keys_to_in_proj defined in
+    # dynamic_network_architectures for each architecture:
+    #
+    # PlainConvUNet:
+    #   - encoder.stages.0.0.convs.0.conv
+    #   - encoder.stages.0.0.convs.0.all_modules.0
+    # ResidualEncoderUNet:
+    #   - encoder.stem.convs.0.conv
+    #   - encoder.stem.convs.0.all_modules.0
+    # ResNetD:
+    #   - stem.0.conv
+    #   - stem.0.all_modules.0
+    # Primus:
+    #   - down_projection.proj
+    first_conv_key_patterns = [
+        # PlainConvUNet (standard nnUNet)
+        'encoder.stages.0.0.convs.0.conv.weight',
+        'encoder.stages.0.0.convs.0.all_modules.0.weight',
+        # ResidualEncoderUNet (ResEnc)
+        'encoder.stem.convs.0.conv.weight',
+        'encoder.stem.convs.0.all_modules.0.weight',
+        # ResNetD
+        'stem.0.conv.weight',
+        'stem.0.all_modules.0.weight',
+        # Primus
+        'down_projection.proj.weight',
     ]
+
+    first_conv_keys = []
+    for pattern in first_conv_key_patterns:
+        if pattern in model_dict.keys():
+            first_conv_keys.append(pattern)
 
     for key in first_conv_keys:
         if key in pretrained_dict:
             pretrained_shape = pretrained_dict[key].shape
             model_shape = model_dict[key].shape
 
-            # Check if only input channels differ
+            # Check if this is a conv layer with matching spatial dims
+            # but different input channels
             # (shape[1] for conv weights: [out_ch, in_ch, ...])
-            if (len(pretrained_shape) == len(model_shape) and
+            if (len(pretrained_shape) >= 3 and
+                len(model_shape) >= 3 and
+                len(pretrained_shape) == len(model_shape) and
                 pretrained_shape[0] == model_shape[0] and
                 pretrained_shape[2:] == model_shape[2:] and
                     pretrained_shape[1] != model_shape[1]):
@@ -58,13 +87,10 @@ def load_pretrained_weights(network, fname, verbose=False):
                 pretrained_in_ch = pretrained_shape[1]
                 model_in_ch = model_shape[1]
 
-                if verbose:
-                    print(f"Expanding input channels for {key}: "
-                          f"{pretrained_in_ch} -> {model_in_ch}")
+                print(f"Expanding input channels for {key}: "
+                      f"{pretrained_in_ch} -> {model_in_ch}")
 
                 # Repeat the pretrained weights across input channels
-                # Strategy: repeat the single channel weights for each
-                # new channel
                 weight = pretrained_dict[key]
 
                 # Calculate how many times to repeat and if remainder
@@ -82,13 +108,15 @@ def load_pretrained_weights(network, fname, verbose=False):
                         weight[:, :remainder, ...]
                     ], dim=1)
 
-                # Normalize by dividing by the number of input channels
-                # to maintain similar activation magnitudes
+                # Normalize to maintain similar activation magnitudes
                 expanded_weights = (expanded_weights / model_in_ch *
                                     pretrained_in_ch)
 
                 # Update the pretrained_dict with expanded weights
                 pretrained_dict[key] = expanded_weights
+
+                # Once we've found and expanded the input layer, stop
+                break
 
     # verify that all but the segmentation layers have the same shape
     for key, _ in model_dict.items():
