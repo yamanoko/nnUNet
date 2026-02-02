@@ -22,6 +22,11 @@
         }
     },
     
+    "labels": {
+        "background": 0,
+        "foreground": 1
+    },
+    
     "numTraining": 100,
     "overwrite_image_reader_writer": "SimpleITKIO"
 }

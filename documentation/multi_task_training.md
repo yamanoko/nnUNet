@@ -62,15 +62,22 @@ nnUNet_raw/DatasetXXX_MultiTaskExample/
         }
     },
     
+    "labels": {
+        "background": 0,
+        "foreground": 1
+    },
+    
     "numTraining": 100
 }
 ```
 
 **Key differences from standard dataset.json:**
-- Uses `"tasks"` instead of `"labels"`
+- Uses `"tasks"` instead of `"labels"` for defining task-specific classes
 - Each task has its own `"labels"` dictionary
 - Each task can have a different number of classes
 - Each task can independently use region-based training (by specifying labels as lists)
+
+**Important:** The `"labels"` key (with `background` and `foreground`) is **required** for compatibility with nnU-Net's experiment planning and preprocessing pipeline. This allows `nnUNetv2_plan_and_preprocess` to run without errors. The actual task-specific labels in `"tasks"` are used during training.
 
 ### Label Files Format
 
