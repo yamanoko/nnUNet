@@ -116,18 +116,71 @@ class nnUNetTrainerMultiTaskCustomWeights(nnUNetTrainerMultiTask):
 
 ## Finetuning
 
-### From Multi-Task to Single-Task
+### From Multi-Task to Single-Task (Complete Workflow)
 
-A key feature is that multi-task pretrained models can be finetuned to single-task models. The encoder and decoder weights are transferred, while segmentation heads are reinitialized:
+A key feature is that multi-task pretrained models can be finetuned to single-task models. The encoder and decoder weights are transferred, while segmentation heads are reinitialized.
+
+Below is the complete command sequence for pretraining with multi-task and finetuning on a single-task dataset:
+
+#### Step 1: Plan and Preprocess the Finetuning Dataset
+
+First, run experiment planning and preprocessing on your target (single-task) dataset:
 
 ```bash
-# Pretrain with multi-task
-nnUNetv2_train MULTITASK_DATASET 3d_fullres 0 -tr nnUNetTrainerMultiTask
-
-# Finetune on single-task dataset
-nnUNetv2_train SINGLETASK_DATASET 3d_fullres 0 \
-    -pretrained_weights /path/to/multitask/checkpoint_final.pth
+nnUNetv2_plan_and_preprocess -d FINETUNING_DATASET --verify_dataset_integrity
 ```
+
+#### Step 2: Extract Fingerprint of the Pretraining Dataset
+
+Extract the dataset fingerprint of your multi-task pretraining dataset (if not yet available):
+
+```bash
+nnUNetv2_extract_fingerprint -d MULTITASK_DATASET
+```
+
+#### Step 3: Transfer Plans from Finetuning to Pretraining Dataset
+
+Transfer the plans from the finetuning dataset to the pretraining dataset to ensure matching network topologies:
+
+```bash
+nnUNetv2_move_plans_between_datasets -s FINETUNING_DATASET -t MULTITASK_DATASET -sp nnUNetPlans -tp nnUNetPlans_pretrain
+```
+
+This ensures that the network architecture (patch size, topology, batch size) matches between pretraining and finetuning.
+
+#### Step 4: Preprocess the Multi-Task Pretraining Dataset
+
+Run preprocessing on the pretraining dataset with the transferred plans:
+
+```bash
+nnUNetv2_preprocess -d MULTITASK_DATASET -plans_name nnUNetPlans_pretrain
+```
+
+#### Step 5: Pretrain with Multi-Task
+
+Train the multi-task model using all available data (fold `all`):
+
+```bash
+nnUNetv2_train MULTITASK_DATASET 3d_fullres all -tr nnUNetTrainerMultiTask -p nnUNetPlans_pretrain
+```
+
+The trained model will be saved at:
+```
+nnUNet_results/DatasetXXX_MultiTask/nnUNetTrainerMultiTask__nnUNetPlans_pretrain__3d_fullres/fold_all/checkpoint_final.pth
+```
+
+#### Step 6: Finetune on Single-Task Dataset
+
+Finally, finetune on your target single-task dataset using the pretrained weights:
+
+```bash
+nnUNetv2_train FINETUNING_DATASET 3d_fullres FOLD \
+    -pretrained_weights /path/to/nnUNet_results/DatasetXXX_MultiTask/nnUNetTrainerMultiTask__nnUNetPlans_pretrain__3d_fullres/fold_all/checkpoint_final.pth
+```
+
+Replace `FOLD` with the desired fold number (0-4) or `all`.
+
+**Note**: When loading multi-task pretrained weights, only the encoder and decoder weights are transferred. The multi-task segmentation heads (`.seg_layers.`, `.multi_head_seg_layers.`, `.task_heads.`) are automatically skipped, and the single-task segmentation head is initialized randomly.
 
 ### From Single-Task to Multi-Task
 
@@ -255,7 +308,8 @@ Each task uses either DC+CE loss (standard) or DC+BCE loss (region-based) depend
 
 When loading pretrained weights, the following patterns are skipped:
 - `.seg_layers.` (standard nnU-Net heads)
-- `.multi_head_seg_layers.` (multi-task heads)
-- `.task_heads.` (task-specific heads)
+- `.multi_head_seg_layers.` (multi-task heads in legacy MultiHeadUNet)
+- `.task_heads.` (task-specific heads in legacy MultiHeadUNet)
+- `.task_seg_layers.` (task-specific heads in MultiHeadSegmentationWrapper)
 
 This ensures encoder/decoder weights transfer while heads are reinitialized.

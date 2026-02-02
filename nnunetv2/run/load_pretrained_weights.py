@@ -30,6 +30,7 @@ def load_pretrained_weights(network, fname, verbose=False):
         # Multi-task segmentation heads - skip when finetuning from multi-task to single-task
         '.multi_head_seg_layers.',
         '.task_heads.',
+        '.task_seg_layers.',  # Used in MultiHeadSegmentationWrapper
     ]
 
     if isinstance(network, DDP):
