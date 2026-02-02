@@ -1,0 +1,27 @@
+{
+    "channel_names": {
+        "0": "CT"
+    },
+    "file_ending": ".nii.gz",
+    
+    "tasks": {
+        "organ": {
+            "labels": {
+                "background": 0,
+                "liver": 1,
+                "spleen": 2,
+                "kidney": 3
+            }
+        },
+        "lesion": {
+            "labels": {
+                "background": 0,
+                "tumor": 1,
+                "cyst": 2
+            }
+        }
+    },
+    
+    "numTraining": 100,
+    "overwrite_image_reader_writer": "SimpleITKIO"
+}
