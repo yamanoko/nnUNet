@@ -190,6 +190,27 @@ Model selection is based on the combined Dice score.
 3. **Sufficient Data**: Multi-task learning requires more data since the model must learn multiple tasks
 4. **Task Order**: The order of tasks in `dataset.json` must match the channel order in label files
 
+## Supported Architectures
+
+Multi-task training supports **all nnU-Net architectures** through the `MultiHeadSegmentationWrapper`:
+
+| Architecture | Support | Notes |
+|-------------|---------|-------|
+| `PlainConvUNet` | ✅ Fully supported | Standard nnU-Net architecture |
+| `ResidualEncoderUNet` | ✅ Fully supported | ResEnc presets |
+| `Primus` | ✅ Fully supported | Mamba-based architecture |
+| Custom architectures | ✅ Supported | Any architecture with `seg_layers` attribute |
+
+The wrapper approach automatically detects and replaces segmentation heads for any architecture, so you can use:
+
+```bash
+# With ResEnc preset
+nnUNetv2_train DATASET 3d_fullres_resenc FOLD -tr nnUNetTrainerMultiTask
+
+# With Primus (if available)
+nnUNetv2_train DATASET 3d_fullres_primus FOLD -tr nnUNetTrainerMultiTask
+```
+
 ## Limitations
 
 - Inference pipeline is not fully integrated yet
@@ -200,8 +221,16 @@ Model selection is based on the combined Dice score.
 
 ### Network Architecture
 
-The `MultiHeadUNet` class wraps standard nnU-Net architectures (PlainConvUNet, ResidualEncoderUNet) and adds:
+The `MultiHeadSegmentationWrapper` class wraps **any** nnU-Net architecture and adds multi-head functionality:
 
+1. **Base network creation**: Standard network is created via `get_network_from_plans`
+2. **Head replacement**: Original `seg_layers` are replaced with task-specific heads stored in `task_heads`
+3. **Feature interception**: Decoder features are captured via forward hooks and passed to each task head
+
+This approach has several advantages:
+- Works with any architecture (PlainConvUNet, ResidualEncoderUNet, Primus, custom)
+- No need to reimplement or modify the base architecture
+- Automatically benefits from improvements to base architectures
 - `multi_head_seg_layers`: Contains task-specific 1×1 convolution heads
 - Deep supervision is supported with multiple outputs per task at different resolutions
 

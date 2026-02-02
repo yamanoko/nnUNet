@@ -63,7 +63,10 @@ from nnunetv2.training.loss.compound_losses import DC_and_CE_loss, DC_and_BCE_lo
 from nnunetv2.training.loss.dice import MemoryEfficientSoftDiceLoss
 
 # Multi-task specific imports
-from nnunetv2.architectures.multi_head_unet import MultiHeadUNet, get_multi_head_network_from_plans
+from nnunetv2.architectures.multi_head_wrapper import (
+    MultiHeadSegmentationWrapper,
+    get_multi_head_network_from_plans_v2
+)
 from nnunetv2.utilities.label_handling.multi_task_label_handling import (
     MultiTaskLabelManager,
     get_multi_task_label_manager_from_plans
@@ -192,6 +195,9 @@ class nnUNetTrainerMultiTask(nnUNetTrainer):
         """
         Build the multi-head network architecture.
         
+        This method uses the wrapper approach to support ANY nnU-Net architecture
+        (PlainConvUNet, ResidualEncoderUNet, Primus, etc.).
+        
         Args:
             architecture_class_name: Base architecture class name
             arch_init_kwargs: Architecture init kwargs
@@ -201,11 +207,11 @@ class nnUNetTrainerMultiTask(nnUNetTrainer):
             enable_deep_supervision: Whether to enable deep supervision
         
         Returns:
-            MultiHeadUNet instance
+            MultiHeadSegmentationWrapper instance (supports any base architecture)
         """
         if isinstance(num_output_channels, dict):
-            # Multi-task mode
-            return get_multi_head_network_from_plans(
+            # Multi-task mode - use wrapper approach for any architecture
+            return get_multi_head_network_from_plans_v2(
                 arch_class_name=architecture_class_name,
                 arch_kwargs=arch_init_kwargs,
                 arch_kwargs_req_import=arch_init_kwargs_req_import,
