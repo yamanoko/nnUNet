@@ -31,6 +31,7 @@ def load_pretrained_weights(network, fname, verbose=False):
         '.multi_head_seg_layers.',
         '.task_heads.',
         '.task_seg_layers.',  # Used in MultiHeadSegmentationWrapper
+        '.task_up_projections.',  # Used in PrimusMultiHeadWrapper for multi-task Primus
     ]
 
     if isinstance(network, DDP):
