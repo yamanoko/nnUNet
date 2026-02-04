@@ -57,7 +57,7 @@ from nnunetv2.utilities.collate_outputs import collate_outputs
 from nnunetv2.utilities.get_network_from_plans import get_network_from_plans
 from nnunetv2.utilities.helpers import dummy_context, empty_cache
 from nnunetv2.utilities.plans_handling.plans_handler import PlansManager
-from nnunetv2.training.dataloading.utils import get_allowed_n_proc_DA
+from nnunetv2.utilities.default_n_proc_DA import get_allowed_n_proc_DA
 from nnunetv2.training.dataloading.nnunet_dataset import infer_dataset_class
 from nnunetv2.training.loss.compound_losses import DC_and_CE_loss, DC_and_BCE_loss
 from nnunetv2.training.loss.dice import MemoryEfficientSoftDiceLoss

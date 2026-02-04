@@ -575,7 +575,7 @@ class AbstractPrimusMultiTask(nnUNetTrainer_warmup):
         """Get multi-task data loaders."""
         from nnunetv2.training.dataloading.nnunet_dataset import infer_dataset_class
         from nnunetv2.training.dataloading.multi_task_data_loader import nnUNetDataLoaderMultiTask
-        from nnunetv2.training.dataloading.utils import get_allowed_n_proc_DA
+        from nnunetv2.utilities.default_n_proc_DA import get_allowed_n_proc_DA
         from batchgenerators.dataloading.single_threaded_augmenter import SingleThreadedAugmenter
         from batchgenerators.dataloading.nondet_multi_threaded_augmenter import NonDetMultiThreadedAugmenter
         
