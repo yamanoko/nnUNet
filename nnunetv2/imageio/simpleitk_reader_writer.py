@@ -112,7 +112,49 @@ class SimpleITKIO(BaseReaderWriter):
         return np.vstack(images, dtype=np.float32, casting='unsafe'), dict
 
     def read_seg(self, seg_fname: str) -> Tuple[np.ndarray, dict]:
-        return self.read_images((seg_fname, ))
+        """
+        Read segmentation file. Supports both single-task (3D) and multi-task (4D) segmentations.
+        
+        For multi-task segmentation, the NIfTI file has shape (X, Y, Z, num_tasks) and SimpleITK
+        reads it as (num_tasks, Z, Y, X). This method converts it to (num_tasks, X, Y, Z) format
+        expected by nnU-Net.
+        
+        :param seg_fname: Path to segmentation file
+        :return: Tuple of (segmentation array, properties dict)
+        """
+        itk_image = sitk.ReadImage(seg_fname)
+        npy_seg = sitk.GetArrayFromImage(itk_image)
+        spacing = itk_image.GetSpacing()
+        
+        if npy_seg.ndim == 2:
+            # 2D segmentation
+            npy_seg = npy_seg[None, None]
+            max_spacing = max(spacing)
+            spacing_for_nnunet = (max_spacing * 999, *list(spacing)[::-1])
+        elif npy_seg.ndim == 3:
+            # 3D single-task segmentation (standard case)
+            npy_seg = npy_seg[None]
+            spacing_for_nnunet = list(spacing)[::-1]
+        elif npy_seg.ndim == 4:
+            # 4D multi-task segmentation: SimpleITK returns (num_tasks, Z, Y, X)
+            # We need to convert to (num_tasks, X, Y, Z) for nnU-Net consistency
+            # Move spatial axes to match nnU-Net convention: (C, Z, Y, X) -> (C, X, Y, Z)
+            npy_seg = np.moveaxis(npy_seg, [1, 2, 3], [3, 2, 1])
+            spacing_for_nnunet = list(spacing)[::-1][1:]  # Exclude the 4th dimension spacing
+        else:
+            raise RuntimeError(f"Unexpected number of dimensions: {npy_seg.ndim} in segmentation file {seg_fname}")
+        
+        spacing_for_nnunet = list(np.abs(spacing_for_nnunet))
+        
+        properties = {
+            'sitk_stuff': {
+                'spacing': spacing,
+                'origin': itk_image.GetOrigin(),
+                'direction': itk_image.GetDirection()
+            },
+            'spacing': spacing_for_nnunet
+        }
+        return npy_seg.astype(np.float32), properties
 
     def write_seg(self, seg: np.ndarray, output_fname: str, properties: dict) -> None:
         assert seg.ndim == 3, 'segmentation must be 3d. If you are exporting a 2d segmentation, please provide it as shape 1,x,y'
@@ -217,6 +259,55 @@ class SimpleITKIOWithReorient(SimpleITKIO):
             'spacing': spacings_for_nnunet[0]
         }
         return np.vstack(images, dtype=np.float32, casting='unsafe'), dict
+
+    def read_seg(self, seg_fname: str, orientation: str = "RAS") -> Tuple[np.ndarray, dict]:
+        """
+        Read segmentation file with reorientation. Supports both single-task (3D) and multi-task (4D) segmentations.
+        
+        For multi-task segmentation, the NIfTI file has shape (X, Y, Z, num_tasks) and SimpleITK
+        reads it as (num_tasks, Z, Y, X). This method converts it to (num_tasks, X, Y, Z) format
+        expected by nnU-Net after applying reorientation.
+        
+        :param seg_fname: Path to segmentation file
+        :param orientation: Target orientation (default: "RAS")
+        :return: Tuple of (segmentation array, properties dict)
+        """
+        itk_image = sitk.ReadImage(seg_fname)
+        original_orientation = sitk.DICOMOrientImageFilter_GetOrientationFromDirectionCosines(itk_image.GetDirection())
+        itk_image = sitk.DICOMOrient(itk_image, orientation)
+        
+        npy_seg = sitk.GetArrayFromImage(itk_image)
+        spacing = itk_image.GetSpacing()
+        
+        if npy_seg.ndim == 2:
+            # 2D segmentation
+            npy_seg = npy_seg[None, None]
+            max_spacing = max(spacing)
+            spacing_for_nnunet = (max_spacing * 999, *list(spacing)[::-1])
+        elif npy_seg.ndim == 3:
+            # 3D single-task segmentation
+            npy_seg = npy_seg[None]
+            spacing_for_nnunet = list(spacing)[::-1]
+        elif npy_seg.ndim == 4:
+            # 4D multi-task segmentation: SimpleITK returns (num_tasks, Z, Y, X)
+            # Convert to (num_tasks, X, Y, Z) for nnU-Net consistency
+            npy_seg = np.moveaxis(npy_seg, [1, 2, 3], [3, 2, 1])
+            spacing_for_nnunet = list(spacing)[::-1][1:]
+        else:
+            raise RuntimeError(f"Unexpected number of dimensions: {npy_seg.ndim} in segmentation file {seg_fname}")
+        
+        spacing_for_nnunet = list(np.abs(spacing_for_nnunet))
+        
+        properties = {
+            'sitk_stuff': {
+                'spacing': spacing,
+                'origin': itk_image.GetOrigin(),
+                'direction': itk_image.GetDirection(),
+                'original_orientation': original_orientation
+            },
+            'spacing': spacing_for_nnunet
+        }
+        return npy_seg.astype(np.float32), properties
 
     def write_seg(self, seg, output_fname, properties):
         assert seg.ndim == 3, 'segmentation must be 3d. If you are exporting a 2d segmentation, please provide it as shape 1,x,y'

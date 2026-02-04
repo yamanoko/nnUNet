@@ -43,6 +43,7 @@ class DatasetFingerprintExtractor(object):
                                        num_samples: int = 10000):
         """
         images=image with multiple channels = shape (c, x, y(, z))
+        segmentation: shape (1, x, y, z) for single-task or (num_tasks, x, y, z) for multi-task
         """
         assert images.ndim == 4 and segmentation.ndim == 4
         assert not np.any(np.isnan(segmentation)), "Segmentation contains NaN values. grrrr.... :-("
@@ -54,8 +55,11 @@ class DatasetFingerprintExtractor(object):
         # we don't use the intensity_statistics_per_channel at all, it's just something that might be nice to have
         intensity_statistics_per_channel = []
 
-        # segmentation is 4d: 1,x,y,z. We need to remove the empty dimension for the following code to work
+        # segmentation is 4d: (num_tasks, x, y, z) for multi-task or (1, x, y, z) for single-task
+        # Create foreground mask by checking if any task/channel has foreground
         foreground_mask = segmentation[0] > 0
+        for c in range(1, segmentation.shape[0]):
+            foreground_mask |= segmentation[c] > 0
         percentiles = np.array((0.5, 50.0, 99.5))
 
         for i in range(len(images)):

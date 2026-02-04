@@ -89,7 +89,50 @@ class NibabelIO(BaseReaderWriter):
         return np.vstack(images, dtype=np.float32, casting='unsafe'), dict
 
     def read_seg(self, seg_fname: str) -> Tuple[np.ndarray, dict]:
-        return self.read_images((seg_fname,))
+        """
+        Read segmentation file. Supports both single-task (3D) and multi-task (4D) segmentations.
+        
+        For multi-task segmentation, the NIfTI file has shape (X, Y, Z, num_tasks).
+        This method converts it to (num_tasks, X, Y, Z) format expected by nnU-Net.
+        
+        :param seg_fname: Path to segmentation file
+        :return: Tuple of (segmentation array, properties dict)
+        """
+        import nibabel
+        nib_image = nibabel.load(seg_fname)
+        original_affine = nib_image.affine
+        npy_seg = nib_image.get_fdata()
+        
+        # spacing is taken in reverse order to be consistent with SimpleITK axis ordering
+        spacing_for_nnunet = [float(i) for i in nib_image.header.get_zooms()[::-1]]
+        
+        if npy_seg.ndim == 2:
+            # 2D segmentation: transpose and add channel dimension
+            npy_seg = npy_seg.transpose((1, 0))[None, None]
+            max_spacing = max(spacing_for_nnunet)
+            spacing_for_nnunet = [max_spacing * 999] + spacing_for_nnunet
+        elif npy_seg.ndim == 3:
+            # 3D single-task segmentation: transpose to be consistent with SimpleITK
+            # NIfTI stores (X, Y, Z), we transpose to (Z, Y, X) then add channel -> (1, Z, Y, X)
+            # But nnU-Net expects (C, X, Y, Z), so we do transpose((2, 1, 0)) then add [None]
+            npy_seg = npy_seg.transpose((2, 1, 0))[None]
+        elif npy_seg.ndim == 4:
+            # 4D multi-task segmentation: NIfTI has shape (X, Y, Z, num_tasks)
+            # We need to convert to (num_tasks, X, Y, Z) for nnU-Net
+            # First transpose spatial axes: (X, Y, Z, C) -> (C, Z, Y, X)
+            npy_seg = npy_seg.transpose((3, 2, 1, 0))
+            # Exclude the 4th dimension spacing
+            spacing_for_nnunet = spacing_for_nnunet[1:]
+        else:
+            raise RuntimeError(f"Unexpected number of dimensions: {npy_seg.ndim} in segmentation file {seg_fname}")
+        
+        properties = {
+            'nibabel_stuff': {
+                'original_affine': original_affine,
+            },
+            'spacing': spacing_for_nnunet
+        }
+        return npy_seg.astype(np.float32), properties
 
     def write_seg(self, seg: np.ndarray, output_fname: str, properties: dict) -> None:
         # revert transpose
@@ -171,7 +214,54 @@ class NibabelIOWithReorient(BaseReaderWriter):
         return np.vstack(images, dtype=np.float32, casting='unsafe'), dict
 
     def read_seg(self, seg_fname: str) -> Tuple[np.ndarray, dict]:
-        return self.read_images((seg_fname,))
+        """
+        Read segmentation file. Supports both single-task (3D) and multi-task (4D) segmentations.
+        
+        For multi-task segmentation, the NIfTI file has shape (X, Y, Z, num_tasks).
+        This method converts it to (num_tasks, X, Y, Z) format expected by nnU-Net.
+        
+        :param seg_fname: Path to segmentation file
+        :return: Tuple of (segmentation array, properties dict)
+        """
+        nib_image = nibabel.load(seg_fname)
+        original_affine = nib_image.affine
+        npy_seg = nib_image.get_fdata()
+        
+        if npy_seg.ndim == 3:
+            # 3D single-task segmentation: apply reorientation
+            reoriented_image = nib_image.as_reoriented(io_orientation(original_affine))
+            reoriented_affine = reoriented_image.affine
+            spacing_for_nnunet = [float(i) for i in reoriented_image.header.get_zooms()[::-1]]
+            npy_seg = reoriented_image.get_fdata().transpose((2, 1, 0))[None]
+        elif npy_seg.ndim == 4:
+            # 4D multi-task segmentation: NIfTI has shape (X, Y, Z, num_tasks)
+            # Apply reorientation per 3D volume, then stack
+            # For simplicity, we apply the same reorientation logic to each task channel
+            reoriented_affine = None
+            spacing_for_nnunet = None
+            task_volumes = []
+            
+            for task_idx in range(npy_seg.shape[-1]):
+                task_data = npy_seg[..., task_idx]
+                task_nib = nibabel.Nifti1Image(task_data, original_affine)
+                reoriented_task = task_nib.as_reoriented(io_orientation(original_affine))
+                if reoriented_affine is None:
+                    reoriented_affine = reoriented_task.affine
+                    spacing_for_nnunet = [float(i) for i in reoriented_task.header.get_zooms()[::-1]]
+                task_volumes.append(reoriented_task.get_fdata().transpose((2, 1, 0)))
+            
+            npy_seg = np.stack(task_volumes, axis=0)
+        else:
+            raise RuntimeError(f"Unexpected number of dimensions: {npy_seg.ndim} in segmentation file {seg_fname}")
+        
+        properties = {
+            'nibabel_stuff': {
+                'original_affine': original_affine,
+                'reoriented_affine': reoriented_affine,
+            },
+            'spacing': spacing_for_nnunet
+        }
+        return npy_seg.astype(np.float32), properties
 
     def write_seg(self, seg: np.ndarray, output_fname: str, properties: dict) -> None:
         # revert transpose
