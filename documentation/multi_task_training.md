@@ -258,7 +258,7 @@ Multi-task training supports **all nnU-Net architectures** through the `MultiHea
 |-------------|---------|-------|
 | `PlainConvUNet` | ✅ Fully supported | Standard nnU-Net architecture |
 | `ResidualEncoderUNet` | ✅ Fully supported | ResEnc presets |
-| `Primus` | ✅ Fully supported | Mamba-based architecture |
+| `Primus` | ✅ Fully supported | Vision Transformer architecture (see dedicated section below) |
 | Custom architectures | ✅ Supported | Any architecture with `seg_layers` attribute |
 
 The wrapper approach automatically detects and replaces segmentation heads for any architecture, so you can use:
@@ -267,8 +267,130 @@ The wrapper approach automatically detects and replaces segmentation heads for a
 # With ResEnc preset
 nnUNetv2_train DATASET 3d_fullres_resenc FOLD -tr nnUNetTrainerMultiTask
 
-# With Primus (if available)
-nnUNetv2_train DATASET 3d_fullres_primus FOLD -tr nnUNetTrainerMultiTask
+# With Primus (dedicated trainers)
+nnUNetv2_train DATASET 3d_fullres FOLD -tr nnUNet_Primus_M_MultiTask_Trainer
+```
+
+## Primus Multi-Task Training
+
+Primus is a Vision Transformer (ViT) based architecture for 3D medical image segmentation. Due to its unique architecture (EVA encoder + PatchDecode), Primus has **dedicated multi-task trainers** that are optimized for its structure.
+
+### Architecture Overview
+
+```
+                         ┌─→ PatchDecode A → Task A output
+Input → PatchEmbed → EVA ─┤
+                         └─→ PatchDecode B → Task B output
+                                ⋮
+                         └─→ PatchDecode N → Task N output
+```
+
+Unlike standard nnU-Net architectures that use `seg_layers`, Primus uses `up_projection` (PatchDecode) for the segmentation head. The `PrimusMultiHeadWrapper` handles this by creating task-specific PatchDecode instances while sharing the EVA encoder.
+
+### Available Trainers
+
+| Trainer | Model Size | embed_dim | depth | heads | Memory |
+|---------|-----------|-----------|-------|-------|--------|
+| `nnUNet_Primus_S_MultiTask_Trainer` | Small | 396 | 12 | 6 | ~8GB |
+| `nnUNet_Primus_B_MultiTask_Trainer` | Base | 792 | 12 | 12 | ~16GB |
+| `nnUNet_Primus_M_MultiTask_Trainer` | Medium | 864 | 16 | 12 | ~24GB |
+| `nnUNet_Primus_L_MultiTask_Trainer` | Large | 1056 | 24 | 16 | ~40GB |
+
+### Usage
+
+```bash
+# Plan and preprocess
+nnUNetv2_plan_and_preprocess -d DATASET_ID --verify_dataset_integrity
+
+# Train with Primus-M (recommended starting point)
+nnUNetv2_train DATASET_ID 3d_fullres FOLD -tr nnUNet_Primus_M_MultiTask_Trainer
+
+# Train with Primus-S (for limited GPU memory)
+nnUNetv2_train DATASET_ID 3d_fullres FOLD -tr nnUNet_Primus_S_MultiTask_Trainer
+```
+
+### Important Constraints
+
+1. **No Deep Supervision**: Primus does not support deep supervision due to its single-resolution output architecture. The `enable_deep_supervision` flag is automatically set to `False`.
+
+2. **Patch Size Requirements**: Input patch size must be divisible by 8 (the default patch embed size).
+
+3. **3D Only**: Primus is designed for 3D volumetric data only.
+
+### Pretraining and Finetuning with Primus
+
+A key advantage of multi-task Primus training is that the pretrained EVA encoder can be transferred to single-task Primus models.
+
+#### Complete Workflow: Multi-Task Pretraining → Single-Task Finetuning
+
+**Step 1: Plan and preprocess the finetuning (single-task) dataset**
+```bash
+nnUNetv2_plan_and_preprocess -d FINETUNING_DATASET --verify_dataset_integrity
+```
+
+**Step 2: Extract fingerprint of the pretraining (multi-task) dataset**
+```bash
+nnUNetv2_extract_fingerprint -d MULTITASK_DATASET
+```
+
+**Step 3: Transfer plans from finetuning to pretraining dataset**
+```bash
+nnUNetv2_move_plans_between_datasets \
+    -s FINETUNING_DATASET \
+    -t MULTITASK_DATASET \
+    -sp nnUNetPlans \
+    -tp nnUNetPlans_pretrain
+```
+
+**Step 4: Preprocess the multi-task dataset with transferred plans**
+```bash
+nnUNetv2_preprocess -d MULTITASK_DATASET -plans_name nnUNetPlans_pretrain
+```
+
+**Step 5: Pretrain with multi-task Primus**
+```bash
+nnUNetv2_train MULTITASK_DATASET 3d_fullres all \
+    -tr nnUNet_Primus_M_MultiTask_Trainer \
+    -p nnUNetPlans_pretrain
+```
+
+**Step 6: Finetune on single-task dataset**
+```bash
+nnUNetv2_train FINETUNING_DATASET 3d_fullres FOLD \
+    -tr nnUNet_Primus_M_Trainer \
+    -pretrained_weights /path/to/checkpoint_final.pth
+```
+
+#### What Gets Transferred
+
+| Component | Transferred | Notes |
+|-----------|-------------|-------|
+| `down_projection` (PatchEmbed) | ✅ Yes | Input channels auto-adjusted if different |
+| `eva` (ViT Encoder) | ✅ Yes | All transformer weights |
+| `register_tokens` | ✅ Yes | If present |
+| `mask_token` | ✅ Yes | Buffer |
+| `task_up_projections` | ❌ No | Multi-task decoders skipped |
+| `up_projection` | ❌ No | Randomly initialized |
+
+The EVA encoder contains the majority of the model parameters, so pretraining provides significant benefit.
+
+### Custom Task Weights
+
+Create a custom trainer with specific task weights:
+
+```python
+from nnunetv2.training.nnUNetTrainer.primus.primus_trainers import AbstractPrimusMultiTask, PRIMUS_CONFIGS
+
+class nnUNet_Primus_M_MultiTask_CustomWeights(AbstractPrimusMultiTask):
+    def __init__(self, plans, configuration, fold, dataset_json, device):
+        super().__init__(
+            plans, configuration, fold, dataset_json, device,
+            task_loss_weights={"organ": 1.0, "lesion": 2.0}
+        )
+    
+    @property
+    def primus_config(self):
+        return PRIMUS_CONFIGS["M"]
 ```
 
 ## Limitations
@@ -288,11 +410,25 @@ The `MultiHeadSegmentationWrapper` class wraps **any** nnU-Net architecture and 
 3. **Feature interception**: Decoder features are captured via forward hooks and passed to each task head
 
 This approach has several advantages:
-- Works with any architecture (PlainConvUNet, ResidualEncoderUNet, Primus, custom)
+- Works with any architecture (PlainConvUNet, ResidualEncoderUNet, custom)
 - No need to reimplement or modify the base architecture
 - Automatically benefits from improvements to base architectures
 - `multi_head_seg_layers`: Contains task-specific 1×1 convolution heads
 - Deep supervision is supported with multiple outputs per task at different resolutions
+
+#### Primus Multi-Head Architecture
+
+For Primus, the `PrimusMultiHeadWrapper` is used instead, as Primus has a fundamentally different structure:
+
+1. **Shared encoding**: `down_projection` (PatchEmbed) + `eva` (ViT encoder) are shared
+2. **Task-specific decoding**: Each task gets its own `PatchDecode` instance stored in `task_up_projections`
+3. **No deep supervision**: Primus outputs at a single resolution only
+
+```python
+# PrimusMultiHeadWrapper structure
+self.base_network        # Original Primus (down_projection + eva)
+self.task_up_projections # ModuleDict: {task_name: PatchDecode}
+```
 
 ### Loss Function
 
@@ -311,5 +447,6 @@ When loading pretrained weights, the following patterns are skipped:
 - `.multi_head_seg_layers.` (multi-task heads in legacy MultiHeadUNet)
 - `.task_heads.` (task-specific heads in legacy MultiHeadUNet)
 - `.task_seg_layers.` (task-specific heads in MultiHeadSegmentationWrapper)
+- `.task_up_projections.` (task-specific PatchDecode heads in PrimusMultiHeadWrapper)
 
 This ensures encoder/decoder weights transfer while heads are reinitialized.
