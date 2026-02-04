@@ -118,8 +118,7 @@ class NibabelIO(BaseReaderWriter):
             npy_seg = npy_seg.transpose((2, 1, 0))[None]
         elif npy_seg.ndim == 4:
             # 4D multi-task segmentation: NIfTI has shape (X, Y, Z, num_tasks)
-            # We need to convert to (num_tasks, X, Y, Z) for nnU-Net
-            # First transpose spatial axes: (X, Y, Z, C) -> (C, Z, Y, X)
+            # Convert to (num_tasks, Z, Y, X) to match nnU-Net's image format (C, Z, Y, X)
             npy_seg = npy_seg.transpose((3, 2, 1, 0))
             # Exclude the 4th dimension spacing
             spacing_for_nnunet = spacing_for_nnunet[1:]
