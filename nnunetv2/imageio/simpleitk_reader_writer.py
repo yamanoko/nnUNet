@@ -136,10 +136,10 @@ class SimpleITKIO(BaseReaderWriter):
             npy_seg = npy_seg[None]
             spacing_for_nnunet = list(spacing)[::-1]
         elif npy_seg.ndim == 4:
-            # 4D multi-task segmentation: SimpleITK returns (num_tasks, Z, Y, X)
-            # This is already consistent with nnU-Net's image format (C, Z, Y, X)
-            # No additional axis transformation needed
-            spacing_for_nnunet = list(spacing)[::-1][1:]  # Exclude the 4th dimension spacing
+            # 4D multi-task segmentation: SimpleITK returns (Z, Y, X, num_tasks)
+            # Move channel axis from last to first: (Z, Y, X, C) -> (C, Z, Y, X)
+            npy_seg = np.moveaxis(npy_seg, -1, 0)
+            spacing_for_nnunet = list(spacing)[::-1][:-1]  # Exclude the channel dimension spacing
         else:
             raise RuntimeError(f"Unexpected number of dimensions: {npy_seg.ndim} in segmentation file {seg_fname}")
         
@@ -288,10 +288,10 @@ class SimpleITKIOWithReorient(SimpleITKIO):
             npy_seg = npy_seg[None]
             spacing_for_nnunet = list(spacing)[::-1]
         elif npy_seg.ndim == 4:
-            # 4D multi-task segmentation: SimpleITK returns (num_tasks, Z, Y, X)
-            # This is already consistent with nnU-Net's image format (C, Z, Y, X)
-            # No additional axis transformation needed
-            spacing_for_nnunet = list(spacing)[::-1][1:]
+            # 4D multi-task segmentation: SimpleITK returns (Z, Y, X, num_tasks)
+            # Move channel axis from last to first: (Z, Y, X, C) -> (C, Z, Y, X)
+            npy_seg = np.moveaxis(npy_seg, -1, 0)
+            spacing_for_nnunet = list(spacing)[::-1][:-1]  # Exclude the channel dimension spacing
         else:
             raise RuntimeError(f"Unexpected number of dimensions: {npy_seg.ndim} in segmentation file {seg_fname}")
         
