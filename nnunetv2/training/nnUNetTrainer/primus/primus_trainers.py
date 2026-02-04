@@ -376,9 +376,15 @@ class AbstractPrimusMultiTask(nnUNetTrainer_warmup):
                 "Format: {'tasks': {'task_name': {'labels': {...}}, ...}}"
             )
         
+        # Store task_loss_weights before calling super().__init__
+        # Parent class uses inspect.signature to save init args, but task_loss_weights
+        # is not in parent's signature, so we handle it separately
         self.task_loss_weights = task_loss_weights
         
         super().__init__(plans, configuration, fold, dataset_json, device)
+        
+        # Add task_loss_weights to my_init_kwargs for checkpoint saving/loading
+        self.my_init_kwargs['task_loss_weights'] = task_loss_weights
         
         # Primus-specific settings
         self.initial_lr = 3e-4

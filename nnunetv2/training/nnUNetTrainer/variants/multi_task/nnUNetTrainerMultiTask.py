@@ -115,11 +115,17 @@ class nnUNetTrainerMultiTask(nnUNetTrainer):
                 "Format: {'tasks': {'task_name': {'labels': {...}}, ...}}"
             )
         
+        # Store task_loss_weights before calling super().__init__
+        # Parent class uses inspect.signature to save init args, but task_loss_weights
+        # is not in parent's signature, so we handle it separately
         self.task_loss_weights = task_loss_weights
         
         # Call parent __init__ (this will set up most things)
         # We need to override label_manager initialization
         super().__init__(plans, configuration, fold, dataset_json, device)
+        
+        # Add task_loss_weights to my_init_kwargs for checkpoint saving/loading
+        self.my_init_kwargs['task_loss_weights'] = task_loss_weights
         
         # Override label_manager with multi-task version
         self.label_manager: MultiTaskLabelManager = get_multi_task_label_manager_from_plans(
