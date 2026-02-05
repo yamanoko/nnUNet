@@ -109,7 +109,11 @@ class nnUNetTrainer(object):
         # need. So let's save the init args
         self.my_init_kwargs = {}
         for k in inspect.signature(self.__init__).parameters.keys():
-            self.my_init_kwargs[k] = locals()[k]
+            # Only save parameters that exist in the current scope (locals).
+            # Subclass-specific parameters (e.g., task_loss_weights) are not available here
+            # and will be added by the subclass after calling super().__init__()
+            if k in locals():
+                self.my_init_kwargs[k] = locals()[k]
 
         ###  Saving all the init args into class variables for later access
         self.plans_manager = PlansManager(plans)
