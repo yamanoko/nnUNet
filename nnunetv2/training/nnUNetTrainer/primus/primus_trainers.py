@@ -400,6 +400,13 @@ class nnUNet_Primus_S_Trainer_750epochs(nnUNet_Primus_S_Trainer):
         self.num_epochs = 750
 
 
+class nnUNet_Primus_S_Trainer_1000epochs(nnUNet_Primus_S_Trainer):
+    def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
+                 device: torch.device = torch.device("cuda")):
+        super().__init__(plans, configuration, fold, dataset_json, device)
+        self.num_epochs = 1000
+
+
 class nnUNet_Primus_S_Trainer_2000epochs(nnUNet_Primus_S_Trainer):
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
                  device: torch.device = torch.device("cuda")):
@@ -490,6 +497,13 @@ class nnUNet_Primus_B_Trainer_750epochs(nnUNet_Primus_B_Trainer):
                  device: torch.device = torch.device("cuda")):
         super().__init__(plans, configuration, fold, dataset_json, device)
         self.num_epochs = 750
+
+
+class nnUNet_Primus_B_Trainer_1000epochs(nnUNet_Primus_B_Trainer):
+    def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
+                 device: torch.device = torch.device("cuda")):
+        super().__init__(plans, configuration, fold, dataset_json, device)
+        self.num_epochs = 1000
 
 
 class nnUNet_Primus_B_Trainer_2000epochs(nnUNet_Primus_B_Trainer):
@@ -584,6 +598,13 @@ class nnUNet_Primus_M_Trainer_750epochs(nnUNet_Primus_M_Trainer):
         self.num_epochs = 750
 
 
+class nnUNet_Primus_M_Trainer_1000epochs(nnUNet_Primus_M_Trainer):
+    def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
+                 device: torch.device = torch.device("cuda")):
+        super().__init__(plans, configuration, fold, dataset_json, device)
+        self.num_epochs = 1000
+
+
 class nnUNet_Primus_M_Trainer_2000epochs(nnUNet_Primus_M_Trainer):
     def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
                  device: torch.device = torch.device("cuda")):
@@ -674,6 +695,13 @@ class nnUNet_Primus_L_Trainer_750epochs(nnUNet_Primus_L_Trainer):
                  device: torch.device = torch.device("cuda")):
         super().__init__(plans, configuration, fold, dataset_json, device)
         self.num_epochs = 750
+
+
+class nnUNet_Primus_L_Trainer_1000epochs(nnUNet_Primus_L_Trainer):
+    def __init__(self, plans: dict, configuration: str, fold: int, dataset_json: dict,
+                 device: torch.device = torch.device("cuda")):
+        super().__init__(plans, configuration, fold, dataset_json, device)
+        self.num_epochs = 1000
 
 
 class nnUNet_Primus_L_Trainer_2000epochs(nnUNet_Primus_L_Trainer):
