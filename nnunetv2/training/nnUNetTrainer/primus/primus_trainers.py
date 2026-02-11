@@ -29,6 +29,13 @@ class AbstractPrimus(nnUNetTrainer_warmup):
         self.weight_decay = 5e-2
         self.enable_deep_supervision = False
 
+    def _do_i_compile(self):
+        # Disable torch.compile for Primus models.
+        # torch._dynamo guard checks fail when switching from training (autograd enabled)
+        # to inference_mode (autograd disabled) because timm's DropPath stores drop_prob
+        # as a numpy-derived tensor whose dispatch key set changes between modes.
+        return False
+
     @abstractmethod
     def build_network_architecture(
         self,
