@@ -24,6 +24,7 @@ def load_pretrained_weights(network, fname, verbose=False):
 
     skip_strings_in_pretrained = [
         '.seg_layers.',
+        'up_projection.',  # Primus: PatchDecode depends on num_classes, skip like seg_layers
     ]
 
     if isinstance(network, DDP):

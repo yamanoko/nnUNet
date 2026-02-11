@@ -1,10 +1,8 @@
-from typing import List, Tuple, Union
 import torch
-from torch import nn
-from nnunetv2.training.nnUNetTrainer.primus.primus_trainers import (
-    nnUNet_Primus_S_Trainer,
-    nnUNet_Primus_B_Trainer,
-    nnUNet_Primus_M_Trainer,
+from nnunetv2.training.nnUNetTrainer.primus.primus_warmup_finetuning import (
+    nnUNet_Primus_S_WarmupFinetuning,
+    nnUNet_Primus_B_WarmupFinetuning,
+    nnUNet_Primus_M_WarmupFinetuning,
 )
 
 ######################################################
@@ -13,7 +11,7 @@ from nnunetv2.training.nnUNetTrainer.primus.primus_trainers import (
 
 
 # Primus S with patch_size 96x96x96, warmup, and 1000 epochs
-class Primus_S_96_1000epochs_Warmup(nnUNet_Primus_S_Trainer):
+class Primus_S_96_1000epochs_Warmup(nnUNet_Primus_S_WarmupFinetuning):
     def __init__(
         self,
         plans: dict,
@@ -29,7 +27,7 @@ class Primus_S_96_1000epochs_Warmup(nnUNet_Primus_S_Trainer):
 
 
 # Primus S with patch_size 96x96x96, warmup, and 150 epochs
-class Primus_S_96_150epochs_Warmup(nnUNet_Primus_S_Trainer):
+class Primus_S_96_150epochs_Warmup(nnUNet_Primus_S_WarmupFinetuning):
     def __init__(
         self,
         plans: dict,
@@ -45,7 +43,7 @@ class Primus_S_96_150epochs_Warmup(nnUNet_Primus_S_Trainer):
 
 
 # Primus B with patch_size 96x96x96, warmup, and 1000 epochs
-class Primus_B_96_1000epochs_Warmup(nnUNet_Primus_B_Trainer):
+class Primus_B_96_1000epochs_Warmup(nnUNet_Primus_B_WarmupFinetuning):
     def __init__(
         self,
         plans: dict,
@@ -61,7 +59,7 @@ class Primus_B_96_1000epochs_Warmup(nnUNet_Primus_B_Trainer):
 
 
 # Primus B with patch_size 96x96x96, warmup, and 150 epochs
-class Primus_B_96_150epochs_Warmup(nnUNet_Primus_B_Trainer):
+class Primus_B_96_150epochs_Warmup(nnUNet_Primus_B_WarmupFinetuning):
     def __init__(
         self,
         plans: dict,
@@ -77,7 +75,7 @@ class Primus_B_96_150epochs_Warmup(nnUNet_Primus_B_Trainer):
 
 
 # Primus M with patch_size 96x96x96, warmup, and 1000 epochs
-class Primus_M_96_1000epochs_Warmup(nnUNet_Primus_M_Trainer):
+class Primus_M_96_1000epochs_Warmup(nnUNet_Primus_M_WarmupFinetuning):
     def __init__(
         self,
         plans: dict,
@@ -93,7 +91,7 @@ class Primus_M_96_1000epochs_Warmup(nnUNet_Primus_M_Trainer):
 
 
 # Primus M with patch_size 96x96x96, warmup, and 150 epochs
-class Primus_M_96_150epochs_Warmup(nnUNet_Primus_M_Trainer):
+class Primus_M_96_150epochs_Warmup(nnUNet_Primus_M_WarmupFinetuning):
     def __init__(
         self,
         plans: dict,
