@@ -67,6 +67,46 @@ class AbstractPrimusWarmupFinetuning(nnUNetTrainer):
         self.enable_deep_supervision = False
         self.training_stage = None  # 'warmup_all' or 'train'
 
+    def _do_i_compile(self):
+        # Disable torch.compile for Primus models.
+        # torch._dynamo guard checks fail when switching from training (autograd enabled)
+        # to inference_mode (autograd disabled) because timm's DropPath stores drop_prob
+        # as a numpy-derived tensor whose dispatch key set changes between modes.
+        return False
+
+    def perform_actual_validation(self, save_probabilities: bool = False):
+        # Free optimizer and lr_scheduler state from GPU before validation to prevent OOM.
+        # Primus ViT models are large, and AdamW state (~2x model params) can exhaust GPU
+        # memory when combined with full-resolution sliding window inference.
+        self.optimizer.zero_grad(set_to_none=True)
+        for state in self.optimizer.state.values():
+            for v in state.values():
+                if isinstance(v, torch.Tensor):
+                    v.data = v.data.cpu()
+        empty_cache(self.device)
+        self.print_to_log_file("Freed optimizer state from GPU for validation")
+
+        # Compile the network fresh for inference. We disable compile during training
+        # (_do_i_compile returns False) to avoid torch._dynamo guard failures when
+        # switching from training to inference_mode. Here we compile just before
+        # validation so the first trace happens under inference_mode, avoiding the
+        # dispatch key mismatch entirely. This restores the ~20-30% speed benefit.
+        original_network = self.network
+        if self.device.type == 'cuda':
+            self.print_to_log_file("Compiling network for inference...")
+            self.network = torch.compile(self.network)
+
+        super().perform_actual_validation(save_probabilities)
+
+        # Restore uncompiled network (needed if training continues after validation)
+        self.network = original_network
+
+        # Restore optimizer state after validation
+        for state in self.optimizer.state.values():
+            for v in state.values():
+                if isinstance(v, torch.Tensor):
+                    v.data = v.data.to(self.device)
+
     @abstractmethod
     def build_network_architecture(
         self,
