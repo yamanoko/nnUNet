@@ -86,20 +86,14 @@ class AbstractPrimusWarmupFinetuning(nnUNetTrainer):
         empty_cache(self.device)
         self.print_to_log_file("Freed optimizer state from GPU for validation")
 
-        # Compile the network fresh for inference. We disable compile during training
-        # (_do_i_compile returns False) to avoid torch._dynamo guard failures when
-        # switching from training to inference_mode. Here we compile just before
-        # validation so the first trace happens under inference_mode, avoiding the
-        # dispatch key mismatch entirely. This restores the ~20-30% speed benefit.
-        original_network = self.network
-        if self.device.type == 'cuda':
-            self.print_to_log_file("Compiling network for inference...")
-            self.network = torch.compile(self.network)
+        # NOTE: We intentionally do NOT use torch.compile here.
+        # The sliding window predictor uses a Thread-based producer that performs
+        # concurrent CUDA operations (.to(device)). torch.compile's lazy tracing
+        # on the first forward pass can deadlock with these concurrent CUDA ops.
+        # Additionally, timm's DropPath causes dispatch key mismatches between
+        # training and inference_mode contexts.
 
         super().perform_actual_validation(save_probabilities)
-
-        # Restore uncompiled network (needed if training continues after validation)
-        self.network = original_network
 
         # Restore optimizer state after validation
         for state in self.optimizer.state.values():
