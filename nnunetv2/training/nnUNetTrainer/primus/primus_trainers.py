@@ -36,6 +36,26 @@ class AbstractPrimus(nnUNetTrainer_warmup):
         # as a numpy-derived tensor whose dispatch key set changes between modes.
         return False
 
+    def perform_actual_validation(self, save_probabilities: bool = False):
+        # Free optimizer and lr_scheduler state from GPU before validation to prevent OOM.
+        # Primus ViT models are large, and AdamW state (~2x model params) can exhaust GPU
+        # memory when combined with full-resolution sliding window inference.
+        self.optimizer.zero_grad(set_to_none=True)
+        for state in self.optimizer.state.values():
+            for v in state.values():
+                if isinstance(v, torch.Tensor):
+                    v.data = v.data.cpu()
+        empty_cache(self.device)
+        self.print_to_log_file("Freed optimizer state from GPU for validation")
+
+        super().perform_actual_validation(save_probabilities)
+
+        # Restore optimizer state after validation
+        for state in self.optimizer.state.values():
+            for v in state.values():
+                if isinstance(v, torch.Tensor):
+                    v.data = v.data.to(self.device)
+
     @abstractmethod
     def build_network_architecture(
         self,
