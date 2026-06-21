@@ -525,6 +525,31 @@ class nnUNetTrainerSawtoothFinetuning_150ep(nnUNetTrainerSawtoothFinetuning):
         self.num_epochs = 150
 
 
+class nnUNetTrainerSawtoothFinetuning_50ep(nnUNetTrainerSawtoothFinetuning):
+    """
+    Sawtooth fine-tuning trainer with 50 epochs instead of 1000.
+
+    For reduced-epoch finetuning experiments (e.g. amos_50ep_experiment): the
+    same pretrained weights are finetuned for only ~1/3 of the 150ep schedule to
+    study how the gap between pretraining settings changes with fewer epochs.
+    Warmup durations scaled to 1/3 of the 150ep variant (15 -> 5).
+    """
+
+    def __init__(
+        self,
+        plans: dict,
+        configuration: str,
+        fold: int,
+        dataset_json: dict,
+        device: torch.device = torch.device("cuda"),
+    ):
+        super().__init__(plans, configuration, fold, dataset_json, device)
+        # Proportionally scaled from the 150ep variant (15 -> 5)
+        self.warmup_duration_decoder = 5
+        self.warmup_duration_whole_net = 5
+        self.num_epochs = 50
+
+
 # Primus (Transformer) specific trainers with different hyperparameters
 class nnUNetTrainerWarmupFinetuning_Primus(nnUNetTrainer):
     """

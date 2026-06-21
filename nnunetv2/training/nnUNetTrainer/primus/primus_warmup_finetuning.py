@@ -507,3 +507,28 @@ class nnUNet_Primus_M_WarmupFinetuning_2000ep(nnUNet_Primus_M_WarmupFinetuning):
         # Extended warmup for longer training
         self.warmup_duration_whole_net = 100
         self.num_epochs = 2000
+
+
+class nnUNet_Primus_M_WarmupFinetuning_50ep(nnUNet_Primus_M_WarmupFinetuning):
+    """
+    Primus-M Warmup Fine-tuning Schedule (50 epochs).
+
+    For reduced-epoch finetuning experiments (e.g. amos_50ep_experiment): the
+    same pretrained weights are finetuned for only ~1/3 of the 150ep schedule.
+    Learning Rate Schedule:
+        - Stage 1: Linear warm-up for 5 epochs (0 -> 3e-5)
+        - Stage 2: Polynomial decay for 45 epochs (3e-5 -> 0)
+    """
+
+    def __init__(
+        self,
+        plans: dict,
+        configuration: str,
+        fold: int,
+        dataset_json: dict,
+        device: torch.device = torch.device("cuda"),
+    ):
+        super().__init__(plans, configuration, fold, dataset_json, device)
+        # Scaled to 1/3 of the 150ep variant (15 -> 5)
+        self.warmup_duration_whole_net = 5
+        self.num_epochs = 50
